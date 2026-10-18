@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SWIM BALL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Lilita+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="barco.css">
+</head>
+<body>
+
+  <div id="viewer">
+    <div class="hud">
+      <h1>SWIM BALL</h1>
+      <p id="modeLabel">PISCINA · MODO BARCO</p>
+      <p id="speed">VELOCIDADE  0 km/h</p>
+      <p id="score"></p>
+      <p id="timer"></p>
+      <div id="boostBar"><div id="boostFill"></div><span>BOOST</span></div>
+    </div>
+
+    <div id="goalMsg">GOL!</div>
+    <div id="banner"></div>
+
+    <!-- tutorial interativo -->
+    <div id="tutorial" class="tut hidden">
+      <div class="tut-top">
+        <span id="tutStep">1/6</span>
+        <div id="tutDots"></div>
+        <button id="tutSkip" class="ghost">PULAR ▶▶</button>
+      </div>
+      <h3 id="tutTitle"></h3>
+      <p id="tutText"></p>
+      <div id="tutBar"><div id="tutFill"></div></div>
+      <button id="tutDone" class="big hidden">JOGAR ▶</button>
+    </div>
+
+    <div id="start" class="screen">
+      <canvas id="startFx"></canvas>
+      <div class="logo">
+        <div class="logo-badge">FUTEBOL NA PISCINA</div>
+        <h2 id="logoTitle" class="logo-title" aria-label="Swim Ball">
+          <span class="word a">SWIM</span>
+          <span class="word b">BALL</span>
+        </h2>
+        <p class="logo-sub">LANCHAS · BOLA · GOLS</p>
+        <button id="play" class="big play">▶ JOGAR</button>
+      </div>
+    </div>
+
+    <div id="picker" class="screen hidden">
+      <div class="panel">
+        <h3>ESCOLHA A COR</h3>
+        <div id="palette"></div>
+        <button id="go" class="big">PRÓXIMO ▶</button>
+      </div>
+    </div>
+
+    <div id="maps" class="screen hidden">
+      <div class="panel wide">
+        <h3>ESCOLHA O MAPA</h3>
+        <div class="mapview">
+          <canvas id="mapImg" width="640" height="360"></canvas>
+          <button id="mapPrev" class="nav prev" aria-label="Mapa anterior">◀</button>
+          <button id="mapNext" class="nav next" aria-label="Próximo mapa">▶</button>
+          <span id="mapIdx" class="idx">1/7</span>
+        </div>
+        <h4 id="mapName"></h4>
+        <p id="mapDesc"></p>
+        <div id="mapTags"></div>
+        <div id="mapDots"></div>
+        <button id="mapOk" class="big">ESCOLHER ▶</button>
+        <button id="mapBack" class="ghost">← VOLTAR</button>
+      </div>
+    </div>
+
+    <div id="modes" class="screen hidden">
+      <div class="panel">
+        <h3>ESCOLHA O MODO</h3>
+        <button id="modeTrain" class="big">🏋 TREINO</button>
+        <p class="label">COMPETITIVO · 3 MIN · VS BOTS</p>
+        <div id="sizes">
+          <button data-size="1">1x1</button>
+          <button data-size="2">2x2</button>
+          <button data-size="3">3x3</button>
+        </div>
+        <button id="modeOnline" class="big">🌐 ONLINE</button>
+        <button id="modeTut" class="big">❓ TUTORIAL</button>
+        <button id="modesBack" class="ghost">← VOLTAR</button>
+      </div>
+    </div>
+
+    <div id="result" class="screen hidden">
+      <div class="panel">
+        <h3 id="resultTitle">FIM DE JOGO</h3>
+        <p id="resultScore" class="final"></p>
+        <p id="resultSub" class="label"></p>
+        <button id="again" class="big">↻ JOGAR DE NOVO</button>
+        <button id="toMenu" class="ghost">☰ MENU</button>
+      </div>
+    </div>
+
+    <div id="online" class="screen hidden">
+      <div class="panel">
+        <h3>🌐 ONLINE</h3>
+        <input id="netName" type="text" maxlength="12" placeholder="SEU NOME" autocomplete="off">
+        <p class="label">CRIAR SALA</p>
+        <div id="netSizes">
+          <button data-size="1">1x1</button>
+          <button data-size="2">2x2</button>
+          <button data-size="3">3x3</button>
+        </div>
+        <p class="label">ENTRAR NA SALA</p>
+        <input id="netCode" type="text" maxlength="5" placeholder="CÓDIGO" autocomplete="off" autocapitalize="characters">
+        <button id="netJoin" class="big">ENTRAR ▶</button>
+        <p id="netStatus" class="netstatus"></p>
+        <button id="netBack" class="ghost">← VOLTAR</button>
+      </div>
+    </div>
+
+    <div id="lobby" class="screen hidden">
+      <div class="panel wide">
+        <h3>SALA</h3>
+        <div id="roomCode" title="Toque para copiar">-----</div>
+        <p id="lobbyInfo" class="label"></p>
+        <div id="lobbyTeams">
+          <div class="team t0"><h4>🔴 VERMELHO</h4><ul id="team0"></ul></div>
+          <div class="team t1"><h4>🔵 AZUL</h4><ul id="team1"></ul></div>
+        </div>
+        <button id="lobbySwitch" class="big alt">⇄ TROCAR DE TIME</button>
+        <button id="lobbyStart" class="big">▶ INICIAR PARTIDA</button>
+        <p id="lobbyHint" class="keyhint"></p>
+        <button id="lobbyLeave" class="ghost">← SAIR DA SALA</button>
+      </div>
+    </div>
+
+    <div id="pause" class="screen hidden">
+      <div class="panel">
+        <h3>PAUSADO</h3>
+        <div class="vol">
+          <label for="musicVol"><span>🎵 MÚSICA</span><span id="musicPct">50%</span></label>
+          <input type="range" id="musicVol" min="0" max="100" value="50">
+        </div>
+        <div class="vol">
+          <label for="sfxVol"><span>🔊 EFEITOS</span><span id="sfxPct">60%</span></label>
+          <input type="range" id="sfxVol" min="0" max="100" value="60">
+        </div>
+        <div class="trackrow">
+          <button id="pauseMusicToggle" aria-label="Pausar música">⏸</button>
+          <span id="pauseTrack">♪ Música</span>
+          <button id="pauseNext" aria-label="Próxima música">⏭</button>
+        </div>
+        <button id="pauseResume" class="big">▶ CONTINUAR</button>
+        <button id="pauseRestart" class="big alt">↻ REINICIAR PARTIDA</button>
+        <button id="pauseQuit" class="big alt">✖ SAIR DA PARTIDA</button>
+        <p class="keyhint">ESC ou P para pausar</p>
+      </div>
+    </div>
+
+    <div id="rotate">↻ GIRE O CELULAR PARA JOGAR</div>
+
+    <button id="quit">☰ MENU</button>
+    <button id="mute" aria-label="Som">🔊</button>
+
+    <div id="loading">Carregando Swim Ball...</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="barco.js"></script>
+</body>
+</html>
