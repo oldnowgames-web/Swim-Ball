@@ -16,7 +16,10 @@
   const LOW = (window.matchMedia && matchMedia("(pointer: coarse)").matches) ||
     (navigator.hardwareConcurrency || 8) <= 4 ||
     Math.min(innerWidth, innerHeight) < 600;
-  let curPR = Math.min(window.devicePixelRatio || 1, LOW ? 1.5 : 1.75);
+  // celular: usa a resolução nativa (até 2x) para não ficar borrado
+  const DPR = window.devicePixelRatio || 1;
+  const MIN_PR = 1.0;
+  let curPR = Math.min(DPR, 2);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9bbccb);
@@ -25,14 +28,14 @@
   const camera = new THREE.PerspectiveCamera(
     42,
     innerWidth / innerHeight,
-    0.1,
-    700
+    0.5,   // near maior = bem menos z-fighting (objetos tremendo/piscando)
+    600
   );
 
   camera.position.set(8, 6.5, 10);
 
   const renderer = new THREE.WebGLRenderer({
-    antialias: !LOW,
+    antialias: DPR < 2,   // em telas 2x+ o AA é desnecessário e pesado
     powerPreference: "high-performance"
   });
 
@@ -250,8 +253,8 @@
   sun.shadow.camera.top = 18;
   sun.shadow.camera.bottom = -18;
   sun.shadow.radius = 3;
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.03;
+  sun.shadow.bias = LOW ? -0.001 : -0.0004;
+  sun.shadow.normalBias = LOW ? 0.06 : 0.03;
   scene.add(sun);
   scene.add(sun.target);
 
@@ -1327,7 +1330,7 @@
     new THREE.MeshBasicMaterial({ map: markTex, transparent: true, opacity: 0.7, depthWrite: false })
   );
   markMesh.rotation.x = -Math.PI / 2;
-  markMesh.position.y = FLOOR_Y + 0.02;
+  markMesh.position.y = FLOOR_Y + 0.06;
   markMesh.renderOrder = 1;
   scene.add(markMesh);
 
@@ -1372,7 +1375,7 @@
   let causticBase = 0.4;
   const causticMesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * HX, 2 * HZ), causticMat);
   causticMesh.rotation.x = -Math.PI / 2;
-  causticMesh.position.y = FLOOR_Y + 0.04;
+  causticMesh.position.y = FLOOR_Y + 0.12;
   causticMesh.renderOrder = 2;
   scene.add(causticMesh);
 
@@ -1418,7 +1421,7 @@
       roughness: 0.7
     })
   );
-  deckMesh.position.y = RIM_Y - 0.02;
+  deckMesh.position.y = RIM_Y - 0.08;
   deckMesh.receiveShadow = true;
   scene.add(deckMesh);
 
@@ -7437,8 +7440,8 @@
         const fps = (fpsMon.n * 1000) / (now - fpsMon.t);
         fpsMon.t = now;
         fpsMon.n = 0;
-        if (!document.hidden && !paused && mode === "play" && fps < 40 && curPR > 0.8) {
-          curPR = Math.max(0.8, curPR - 0.25);
+        if (!document.hidden && !paused && mode === "play" && fps < 30 && curPR > MIN_PR) {
+          curPR = Math.max(MIN_PR, curPR - 0.25);
           renderer.setPixelRatio(curPR);
           renderer.setSize(innerWidth, innerHeight);
           updateBubbleScale();
