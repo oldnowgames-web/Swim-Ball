@@ -18,8 +18,10 @@
     Math.min(innerWidth, innerHeight) < 600;
   // celular: usa a resolução nativa (até 2x) para não ficar borrado
   const DPR = window.devicePixelRatio || 1;
-  const MIN_PR = 1.0;
-  let curPR = Math.min(DPR, 2);
+  // celular: começa em no máximo 1.5x (2x tem ~78% mais pixels) e a resolução
+  // ainda cai sozinha se o FPS ficar baixo
+  const MIN_PR = LOW ? 0.75 : 1.0;
+  let curPR = Math.min(DPR, LOW ? 1.5 : 2);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9bbccb);
@@ -35,14 +37,16 @@
   camera.position.set(8, 6.5, 10);
 
   const renderer = new THREE.WebGLRenderer({
-    antialias: DPR < 2,   // em telas 2x+ o AA é desnecessário e pesado
+    antialias: !LOW && DPR < 2,   // no celular o AA é pesado; em telas 2x+ é desnecessário
     powerPreference: "high-performance"
   });
 
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(curPR);
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = LOW ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+  // celular: o mapa de sombra é redesenhado em frames alternados (metade do custo)
+  if (LOW) renderer.shadowMap.autoUpdate = false;
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.86;
@@ -411,7 +415,16 @@
   // MATERIAIS
   // ==================================================
 
-  const hullMat = new THREE.MeshPhysicalMaterial({
+  // celular: MeshStandardMaterial (sem a camada clearcoat, bem mais leve no fragment shader)
+  function PhysMat(p) {
+    if (!LOW) return new THREE.MeshPhysicalMaterial(p);
+    const q = Object.assign({}, p);
+    delete q.clearcoat;
+    delete q.clearcoatRoughness;
+    return new THREE.MeshStandardMaterial(q);
+  }
+
+  const hullMat = PhysMat({
     color: 0xf3f5f4,
     metalness: 0.22,
     roughness: 0.22,
@@ -420,7 +433,7 @@
     side: THREE.DoubleSide
   });
 
-  const darkMat = new THREE.MeshPhysicalMaterial({
+  const darkMat = PhysMat({
     color: 0x101c27,
     metalness: 0.45,
     roughness: 0.25,
@@ -433,7 +446,7 @@
     roughness: 0.2
   });
 
-  const glassMat = new THREE.MeshPhysicalMaterial({
+  const glassMat = PhysMat({
     color: 0x448aa4,
     metalness: 0.2,
     roughness: 0.12,
@@ -1016,14 +1029,14 @@
   boat.add(motor);
 
   // Materiais do motor: casco branco com faixa azul, bem visível
-  const motorMat = new THREE.MeshPhysicalMaterial({
+  const motorMat = PhysMat({
     color: 0xf2f5f7,
     metalness: 0.3,
     roughness: 0.25,
     clearcoat: 1
   });
 
-  const accentMat = new THREE.MeshPhysicalMaterial({
+  const accentMat = PhysMat({
     color: 0x1676a2,
     metalness: 0.5,
     roughness: 0.25,
@@ -1195,7 +1208,7 @@
   waveNormal.wrapT = THREE.RepeatWrapping;
   waveNormal.anisotropy = maxAniso;
 
-  const waterMat = new THREE.MeshPhysicalMaterial({
+  const waterMat = PhysMat({
     color: 0x7fb0d6,
     map: waterTexture,
     normalMap: waveNormal,
@@ -1585,32 +1598,74 @@
   }
 
   // Atualiza malha e cores (estilo: cristas claras + espuma)
+  // Otimizado: a marolinha ambiente é calculada por linha/coluna (sem seno por
+  // vértice) e as normais saem direto da grade de alturas (sem computeVertexNormals).
+  const idleK = 0.03 * WAVE_AMP;
+  const colSin = new Float32Array(GW);
+  const colA_s = new Float32Array(GW);
+  const colA_c = new Float32Array(GW);
+  for (let i = 0; i <= NX; i++) {
+    colA_s[i] = Math.sin(gridX[i] * 1.3);
+    colA_c[i] = Math.cos(gridX[i] * 1.3);
+  }
+  const wNrm = waterGeo.attributes.normal;
+  const nArr = wNrm.array;
+
   function updateWaterMesh() {
     const arr = wPos.array;
     const t = simTime;
 
+    for (let i = 0; i <= NX; i++) colSin[i] = Math.sin(gridX[i] * 0.7 + t * 1.1);
+
     for (let j = 0; j <= NZ; j++) {
       const z = gridZ[j];
+      const rowSin = Math.sin(z * 0.45 - t * 0.8);
+      const b = z * 1.3 + t * 1.7;
+      const sB = Math.sin(b), cB = Math.cos(b);
+      const base = j * GW;
+
       for (let i = 0; i <= NX; i++) {
-        const k = j * GW + i;
-        const x = gridX[i];
+        const k = base + i;
         const h0 = hf[k];
 
-        arr[k * 3 + 1] = h0 + idleWave(x, z, t);
+        arr[k * 3 + 1] = h0 + idleK * (colSin[i] + rowSin + 0.6 * (colA_s[i] * cB + colA_c[i] * sB));
 
         const crest = clampN(h0 * 3.6, -0.2, 0.32);
         const f = clampN(foamField[k] * 0.9 + Math.max(0, h0 - 0.1) * 2.5, 0, 1);
         const shade = 0.86 + crest;
+        const inv = 1 - f;
 
-        wCol[k * 3] = Math.min(1, (WT[0] * shade) * (1 - f) + f);
-        wCol[k * 3 + 1] = Math.min(1, (WT[1] * shade) * (1 - f) + f);
-        wCol[k * 3 + 2] = Math.min(1, (WT[2] * shade) * (1 - f) + f);
+        wCol[k * 3] = Math.min(1, WT[0] * shade * inv + f);
+        wCol[k * 3 + 1] = Math.min(1, WT[1] * shade * inv + f);
+        wCol[k * 3 + 2] = Math.min(1, WT[2] * shade * inv + f);
+      }
+    }
+
+    // normais por diferença central na grade
+    const inv2dx = 1 / (2 * dx);
+    const inv2dz = 1 / (2 * dz);
+    for (let j = 0; j <= NZ; j++) {
+      const jU = j > 0 ? -GW : 0;
+      const jD = j < NZ ? GW : 0;
+      const sz = (jD && jU) ? inv2dz : 1 / dz;
+      const base = j * GW;
+      for (let i = 0; i <= NX; i++) {
+        const k = base + i;
+        const iL = i > 0 ? -1 : 0;
+        const iR = i < NX ? 1 : 0;
+        const sx = (iL && iR) ? inv2dx : 1 / dx;
+        const gx = (arr[(k + iR) * 3 + 1] - arr[(k + iL) * 3 + 1]) * sx;
+        const gz = (arr[(k + jD) * 3 + 1] - arr[(k + jU) * 3 + 1]) * sz;
+        const il = 1 / Math.sqrt(gx * gx + gz * gz + 1);
+        nArr[k * 3] = -gx * il;
+        nArr[k * 3 + 1] = il;
+        nArr[k * 3 + 2] = -gz * il;
       }
     }
 
     wPos.needsUpdate = true;
     waterGeo.attributes.color.needsUpdate = true;
-    waterGeo.computeVertexNormals();
+    wNrm.needsUpdate = true;
   }
 
   // ==================================================
@@ -1648,7 +1703,7 @@
     const group = new THREE.Group();
     scene.add(group);
 
-    const frameMat = new THREE.MeshPhysicalMaterial({
+    const frameMat = PhysMat({
       color, metalness: 0.3, roughness: 0.25, clearcoat: 1
     });
 
@@ -1745,7 +1800,7 @@
   // grupo da bola: começa com a esfera procedural e troca pelo modelo GLB ao carregar
   const ballFallback = new THREE.Mesh(
     new THREE.SphereGeometry(BALL_R, 32, 24),
-    new THREE.MeshPhysicalMaterial({ map: ballTex, roughness: 0.35, clearcoat: 0.6 })
+    PhysMat({ map: ballTex, roughness: 0.35, clearcoat: 0.6 })
   );
   ballFallback.castShadow = true;
   ballFallback.receiveShadow = true;
@@ -7421,6 +7476,8 @@
   // ==================================================
 
   let waterFrame = 0;
+  let shadowFrame = 0;
+  let lastSpeedTxt = "", lastTimerTxt = "", lastBoostW = "";
   const fpsMon = { t: 0, n: 0 };
   const clock = new THREE.Clock();
   let acc = 0;
@@ -7436,11 +7493,11 @@
       const now = performance.now();
       if (!fpsMon.t) fpsMon.t = now;
       fpsMon.n++;
-      if (now - fpsMon.t > 2500) {
+      if (now - fpsMon.t > (LOW ? 1500 : 2500)) {
         const fps = (fpsMon.n * 1000) / (now - fpsMon.t);
         fpsMon.t = now;
         fpsMon.n = 0;
-        if (!document.hidden && !paused && mode === "play" && fps < 30 && curPR > MIN_PR) {
+        if (!document.hidden && !paused && mode === "play" && fps < (LOW ? 45 : 30) && curPR > MIN_PR) {
           curPR = Math.max(MIN_PR, curPR - 0.25);
           renderer.setPixelRatio(curPR);
           renderer.setSize(innerWidth, innerHeight);
@@ -7449,7 +7506,7 @@
       }
     }
 
-    const dt = (paused && match.type !== "online") ? (clock.getDelta(), 0) : Math.min(clock.getDelta(), 0.05);
+    const dt = (paused && match.type !== "online") ? (clock.getDelta(), 0) : Math.min(clock.getDelta(), LOW ? 0.034 : 0.05);
     simTime += dt;
     acc += dt;
 
@@ -7621,7 +7678,10 @@
     accentMat.color.lerp(accentTarget, Math.min(1, dt * 8));
 
     // barra de boost + câmera "abre" o campo de visão durante o boost
-    boostFill.style.width = (state.boost * 100).toFixed(1) + "%";
+    {
+      const bW = (state.boost * 100).toFixed(1) + "%";
+      if (bW !== lastBoostW) { lastBoostW = bW; boostFill.style.width = bW; }
+    }
     boostBar.classList.toggle("active", state.boosting);
     boostBar.classList.toggle("locked", state.boostLock);
 
@@ -7646,19 +7706,28 @@
       );
     }
 
-    speedEl.textContent = "VELOCIDADE  " + Math.round(sp * 3.6) + " km/h";
+    {
+      const sTxt = "VELOCIDADE  " + Math.round(sp * 3.6) + " km/h";
+      if (sTxt !== lastSpeedTxt) { lastSpeedTxt = sTxt; speedEl.textContent = sTxt; }
+    }
 
     sfx.update(dt);
     netTick(dt);
 
     if (isComp()) {
-      timerEl.textContent = "TEMPO  " + fmtTime(match.time);
-      timerEl.style.color = match.time < 10 && !match.over ? "#ff8a80" : "";
-    } else {
+      const tTxt = "TEMPO  " + fmtTime(match.time);
+      if (tTxt !== lastTimerTxt) {
+        lastTimerTxt = tTxt;
+        timerEl.textContent = tTxt;
+        timerEl.style.color = match.time < 10 && !match.over ? "#ff8a80" : "";
+      }
+    } else if (lastTimerTxt !== "") {
+      lastTimerTxt = "";
       timerEl.textContent = "";
     }
 
     controls.update();
+    if (LOW) renderer.shadowMap.needsUpdate = (shadowFrame++ & 1) === 0;
     renderer.render(scene, camera);
   }
 
